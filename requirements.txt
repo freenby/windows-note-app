@@ -1,0 +1,5 @@
+pywin32==306
+pillow==10.0.0
+keyboard==0.13.5
+tkcalendar==1.6.1
+pystray==0.19.5
