@@ -12,13 +12,14 @@ import win32con
 import winsound
 import tkinter as tk
 from tkinter import messagebox, ttk
+import calendar  # 新增导入calendar模块
 
 class NotificationManager:
     """通知管理器类，负责处理所有提醒相关的功能"""
     
     def __init__(self):
         """初始化通知管理器"""
-        # 存储所有提醒的字典，格式：{note_id: (title, content, time)}
+        # 存储所有提醒的字典，格式：{note_id: (title, content, reminder_datetime, recurrence)}
         self.reminders = {}
         # 控制后台检查线程的标志
         self.running = True
@@ -33,24 +34,21 @@ class NotificationManager:
         """设置更新回调函数"""
         self.update_callback = callback
 
-    def add_reminder(self, note_id, title, content, reminder_time):
-        """
-        添加新的提醒
-        
-        Args:
-            note_id: 记事的唯一标识
-            title: 提醒标题
-            content: 提醒内容
-            reminder_time: 提醒时间，格式：'%Y-%m-%d %H:%M:%S'
-        """
+    def add_reminder(self, note_id, title, content, reminder_time, recurrence="none"):
+        """增强版添加提醒方法"""
         try:
-            # 解析提醒时间
-            reminder_datetime = datetime.strptime(reminder_time, '%Y-%m-%d %H:%M:%S')
-            self.reminders[note_id] = (title, content, reminder_datetime)
-            print(f"成功添加提醒: {title} 将在 {reminder_datetime.strftime('%Y-%m-%d %H:%M:%S')} 提醒")
-            print(f"当前所有提醒: {self.reminders}")
+            # 支持多种时间格式
+            try:
+                reminder_datetime = datetime.strptime(reminder_time, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                reminder_datetime = datetime.strptime(reminder_time, '%Y-%m-%d %H:%M')
+            
+            self.reminders[note_id] = (title, content, reminder_datetime, recurrence)
+            print(f"[SUCCESS] 提醒设置成功 | ID: {note_id} | 时间: {reminder_time} | 类型: {recurrence}")
+            
         except Exception as e:
-            print(f"添加提醒时出错: {e}")
+            print(f"[ERROR] 添加提醒失败: {str(e)}")
+            messagebox.showerror("错误", f"提醒设置失败: {str(e)}")
 
     def remove_reminder(self, note_id):
         """
@@ -117,39 +115,45 @@ class NotificationManager:
         button_frame.pack(fill=tk.X, pady=(15, 0))
         
         def delay_reminder():
+            """延迟提醒按钮的回调函数"""
             try:
+                # 获取延迟时间
                 delay_minutes = int(delay_var.get())
                 if delay_minutes <= 0:
                     messagebox.showerror("错误", "延迟时间必须大于0分钟！")
                     return
                 
-                # 计算新的提醒时间
-                new_time = datetime.now() + timedelta(minutes=delay_minutes)
+                # 获取当前时间作为基准
+                current_time = datetime.now()
+                new_time = current_time + timedelta(minutes=delay_minutes)
                 formatted_time = new_time.strftime('%Y-%m-%d %H:%M:%S')
                 
-                # 更新提醒时间
-                self.reminders[note_id] = (title, content, new_time)
+                # 获取当前的循环设置（如果存在）
+                current_recurrence = "none"
+                if note_id in self.reminders:
+                    _, _, _, current_recurrence = self.reminders[note_id]
                 
-                # 如果设置了回调函数，通知主窗口更新时间
+                # 更新提醒
+                self.reminders[note_id] = (title, content, new_time, current_recurrence)
+                
+                # 如果有回调函数，通知更新
                 if self.update_callback:
                     self.update_callback(note_id, formatted_time)
                 
+                # 关闭提醒窗口
                 reminder_window.destroy()
                 messagebox.showinfo("成功", f"提醒已延迟{delay_minutes}分钟")
                 
             except ValueError:
                 messagebox.showerror("错误", "请输入有效的延迟时间！")
+            except Exception as e:
+                messagebox.showerror("错误", f"设置延迟提醒时出错：{str(e)}")
         
-        # 按钮样式
-        style = ttk.Style()
-        style.configure('Custom.TButton', font=('微软雅黑', 10), padding=5)
-        
+        # 创建按钮
         ttk.Button(button_frame, text="延迟提醒", 
-                  command=delay_reminder,
-                  style='Custom.TButton').pack(side=tk.LEFT, padx=5)
+                  command=delay_reminder).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="关闭", 
-                  command=reminder_window.destroy,
-                  style='Custom.TButton').pack(side=tk.RIGHT, padx=5)
+                  command=reminder_window.destroy).pack(side=tk.LEFT, padx=5)
         
         # 播放提示音
         winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
@@ -163,13 +167,28 @@ class NotificationManager:
         while self.running:
             current_time = datetime.now()
             # 检查每个提醒
-            for note_id, (title, content, reminder_time) in list(self.reminders.items()):
+            for note_id, (title, content, reminder_time, recurrence) in list(self.reminders.items()):
                 if isinstance(reminder_time, datetime) and current_time >= reminder_time:
-                    # 显示提醒窗口
+                    # 直接弹出提醒窗口
                     self._show_reminder(title, content, note_id)
                     # 移除已触发的提醒
-                    del self.reminders[note_id]
+                    if note_id in self.reminders:
+                        del self.reminders[note_id]
             time.sleep(1)  # 每秒检查一次
+
+    def add_one_month(self, dt):
+        """辅助函数：为指定日期加一个月"""
+        year = dt.year
+        month = dt.month
+        day = dt.day
+        if month == 12:
+            year += 1
+            month = 1
+        else:
+            month += 1
+        max_day = calendar.monthrange(year, month)[1]
+        day = min(day, max_day)
+        return dt.replace(year=year, month=month, day=day)
 
     def cleanup(self):
         """清理资源，停止后台线程"""

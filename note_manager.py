@@ -8,6 +8,7 @@ import os
 import json
 from datetime import datetime
 import uuid
+import sys
 
 class NoteManager:
     """记事管理器类，处理记事的存储和检索"""
@@ -17,8 +18,16 @@ class NoteManager:
         初始化记事管理器
         创建存储目录和文件（如果不存在）
         """
+        # 获取程序运行路径
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的程序
+            application_path = os.path.dirname(sys.executable)
+        else:
+            # 如果是开发环境
+            application_path = os.path.dirname(os.path.abspath(__file__))
+            
         # 确保数据目录存在
-        self.data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+        self.data_dir = os.path.join(application_path, 'data')
         os.makedirs(self.data_dir, exist_ok=True)
         
         # 设置记事文件路径
@@ -58,35 +67,28 @@ class NoteManager:
         except Exception as e:
             print(f"保存记事时出错: {e}")
 
-    def add_note(self, title, content, date=None, reminder_time=None):
-        """
-        添加新记事
-        
-        Args:
-            title (str): 记事标题
-            content (str): 记事内容
-            date (str, optional): 日期，格式：'%Y-%m-%d'
-            reminder_time (str, optional): 提醒时间，格式：'%Y-%m-%d %H:%M:%S'
-            
-        Returns:
-            str: 新记事的ID
-        """
-        # 生成唯一ID
+    def add_note(self, title, content, date, reminder_time=""):
+        """更健壮的添加记事方法"""
+        try:
+            # 验证日期格式
+            datetime.strptime(date, "%Y-%m-%d")
+            if reminder_time:
+                datetime.strptime(reminder_time, "%Y-%m-%d %H:%M:%S")
+        except ValueError as e:
+            raise ValueError(f"无效的时间格式: {str(e)}")
+
         note_id = str(uuid.uuid4())
-        
-        # 创建记事数据
         note_data = {
             'title': title,
             'content': content,
-            'date': date or datetime.now().strftime("%Y-%m-%d"),  # 如果没有指定日期，使用当前日期
-            'reminder_time': reminder_time if reminder_time else '',
-            'created_at': datetime.now().isoformat()
+            'date': date,
+            'reminder_time': reminder_time,
+            'created_at': datetime.now().isoformat(),
+            'recurrence': 'none'  # 默认不循环
         }
-        
-        # 添加到记事集合
         self.notes[note_id] = note_data
         self.save_notes(self.notes)
-        
+        print(f"[DEBUG] 新增记事成功 ID: {note_id}")
         return note_id
 
     def update_note(self, note_id, title, content, date, reminder_time):
