@@ -104,7 +104,7 @@ class NoteApp:
             )
             
             # 创建系统托盘图标
-            self.tray_icon = pystray.Icon(
+            self.icon = pystray.Icon(
                 "note_app",
                 icon_image,
                 "我的记事本",
@@ -114,7 +114,7 @@ class NoteApp:
             # 在单独的线程中启动托盘图标
             def run_icon_detached():
                 try:
-                    self.tray_icon.run_detached()
+                    self.icon.run_detached()
                 except Exception as e:
                     print(f"托盘图标启动错误: {str(e)}")
             
@@ -207,10 +207,10 @@ class NoteApp:
                 self.notification_manager.cleanup()
                 
                 # 停止系统托盘图标 - 在单独的线程中执行
-                if hasattr(self, 'tray_icon'):
+                if hasattr(self, 'icon'):
                     try:
                         # 使用线程安全的方式停止图标
-                        threading.Thread(target=self.tray_icon.stop).start()
+                        threading.Thread(target=self.icon.stop).start()
                     except:
                         pass
                 
